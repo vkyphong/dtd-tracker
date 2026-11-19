@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DTD: GAME — Thống Kê Tài Nguyên & Auto Farm</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <header class="topbar">
+            <div class="brand">
+                <div class="brand-icon">🐉</div>
+                <div>
+                    <h1>DTD: GAME Tracker</h1>
+                    <p class="subtitle">Cập nhật tự động mỗi 30s từ game • GitHub Pages + Firebase</p>
+                </div>
+            </div>
+            <div class="topbar-actions">
+                <div class="status-pill" id="syncStatus">
+                    <span class="dot"></span>
+                    <span id="syncText">Chưa kết nối</span>
+                </div>
+                <button class="btn btn-secondary" id="refreshBtn" title="Làm mới ngay">↻ Làm mới</button>
+                <button class="btn btn-primary" id="settingsBtn">⚙ Cấu hình Firebase</button>
+            </div>
+        </header>
+
+        <!-- Banner hướng dẫn nhanh khi chưa cấu hình Firebase URL -->
+        <section class="setup-banner hidden" id="setupBanner">
+            <div>
+                <strong>Chưa có Firebase URL!</strong> Bấm <em>⚙ Cấu hình Firebase</em> để dán link Realtime Database (hoặc điền vào file <code>config.js</code>).
+            </div>
+            <button class="btn btn-primary" id="openSetupFromBanner">Nhập URL ngay</button>
+        </section>
+
+        <!-- Tổng quan KPI -->
+        <section class="kpi-grid">
+            <div class="kpi-card gold-card">
+                <div class="kpi-label">Tổng Vàng (Coins)</div>
+                <div class="kpi-value" id="kpiTotalCoins">0</div>
+                <div class="kpi-sub" id="kpiCoinsRate">+0 / giờ</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Tài khoản Online</div>
+                <div class="kpi-value" id="kpiOnline">0 / 0</div>
+                <div class="kpi-sub" id="kpiOfflineCount">0 offline</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Tổng Gems &amp; Crystals</div>
+                <div class="kpi-value" id="kpiTotalGems">0</div>
+                <div class="kpi-sub" id="kpiTotalCrystals">0 Endless Crystals</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Tổng Wins / Matches</div>
+                <div class="kpi-value" id="kpiTotalWins">0</div>
+                <div class="kpi-sub" id="kpiTotalMatches">0 matches</div>
+            </div>
+        </section>
+
+        <!-- Biểu đồ biến động vàng -->
+        <section class="panel">
+            <div class="panel-header">
+                <div>
+                    <h2>Biểu đồ Vàng (Coins) theo thời gian</h2>
+                    <span class="panel-hint">Lưu lịch sử mỗi lần game gửi dữ liệu lên</span>
+                </div>
+                <div class="chart-controls">
+                    <select id="chartRangeSelect">
+                        <option value="30">30 điểm gần nhất (~15 phút)</option>
+                        <option value="60" selected>60 điểm gần nhất (~30 phút)</option>
+                        <option value="120">120 điểm gần nhất (~1 giờ)</option>
+                        <option value="240">240 điểm gần nhất (~2 giờ)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="coinsChart"></canvas>
+            </div>
+        </section>
+
+        <!-- Bảng chi tiết từng tài khoản -->
+        <section class="panel">
+            <div class="panel-header">
+                <div>
+                    <h2>Danh sách tài khoản</h2>
+                    <span class="panel-hint">Bấm vào từng dòng để xem đầy đủ toàn bộ thông số (Pity, Potions, Team, Traits...)</span>
+                </div>
+                <div class="table-search">
+                    <input type="text" id="searchInput" placeholder="Tìm tên acc hoặc map..." />
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="accounts-table">
+                    <thead>
+                        <tr>
+                            <th>Tài khoản</th>
+                            <th>Trạng thái</th>
+                            <th>Vàng (Coins)</th>
+                            <th>Tốc độ</th>
+                            <th>Gems</th>
+                            <th>Crystals</th>
+                            <th>Shards</th>
+                            <th>Trận hiện tại</th>
+                            <th>Base HP</th>
+                            <th>Cash / Dmg</th>
+                            <th>Wins / Best</th>
+                        </tr>
+                    </thead>
+                    <tbody id="accountsBody">
+                        <tr>
+                            <td colspan="11" class="empty-cell">Đang chờ dữ liệu...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <!-- Modal chi tiết tài khoản -->
+    <div class="modal-backdrop hidden" id="detailModal">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <h3 id="detailTitle">Chi tiết tài khoản</h3>
+                <button class="modal-close" id="closeDetailModal">&times;</button>
+            </div>
+            <div class="modal-body" id="detailBody"></div>
+        </div>
+    </div>
+
+    <!-- Modal cấu hình Firebase -->
+    <div class="modal-backdrop hidden" id="settingsModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Cấu hình Firebase Realtime Database</h3>
+                <button class="modal-close" id="closeSettingsModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <label class="field-label" for="firebaseUrlInput">Firebase Database URL</label>
+                <input
+                    type="url"
+                    id="firebaseUrlInput"
+                    class="field-input"
+                    placeholder="https://ten-project-default-rtdb.asia-southeast1.firebasedatabase.app"
+                />
+                <label class="field-label" for="firebaseAuthInput">Database Secret / Auth Token (tùy chọn)</label>
+                <input
+                    type="password"
+                    id="firebaseAuthInput"
+                    class="field-input"
+                    placeholder="Để trống nếu dùng rules mở"
+                />
+                <p class="field-help">
+                    Cấu hình này được lưu vào trình duyệt (<code>localStorage</code>) để bạn test ngay. Khi deploy lên GitHub Pages, nên điền sẵn vào file <code>config.js</code>.
+                </p>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" id="clearSettingsBtn">Xóa cấu hình lưu tạm</button>
+                    <button class="btn btn-primary" id="saveSettingsBtn">Lưu &amp; Kết nối</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
